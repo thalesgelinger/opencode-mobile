@@ -8,6 +8,7 @@ import {
   Alert,
   FlatList,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useAppStore } from '@/store/useAppStore';
@@ -21,12 +22,13 @@ interface DrawerContentProps {
 export function DrawerContent({ navigation }: DrawerContentProps) {
   const colorScheme = useColorScheme() || 'light';
   const theme = colors[colorScheme];
-  const { baseURL, setBaseURL, isBaseURLValid, sessions, setCurrentSessionId, deleteSession } =
+  const { baseURL, setBaseURL, isBaseURLValid, sessions, setCurrentSessionId, deleteSession, fetchSessionMessages } =
     useAppStore();
 
   const [isEditingURL, setIsEditingURL] = useState(!baseURL);
   const [urlInput, setUrlInput] = useState(baseURL);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
 
   const handleSaveURL = async () => {
     if (!urlInput.trim()) {
@@ -72,6 +74,30 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to create session');
+    }
+  };
+
+  const handleSelectSession = async (sessionId: string) => {
+    setLoadingSessionId(sessionId);
+    
+    try {
+      await fetchSessionMessages(sessionId);
+      setCurrentSessionId(sessionId);
+      navigation.closeDrawer();
+    } catch (error) {
+      Alert.alert(
+        'Error Loading Messages',
+        'Failed to load messages. Would you like to retry?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Retry', 
+            onPress: () => handleSelectSession(sessionId)
+          }
+        ]
+      );
+    } finally {
+      setLoadingSessionId(null);
     }
   };
 
@@ -158,10 +184,8 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.sessionItem, { borderBottomColor: theme.border }]}
-              onPress={() => {
-                setCurrentSessionId(item.id);
-                navigation.closeDrawer();
-              }}
+              onPress={() => handleSelectSession(item.id)}
+              disabled={loadingSessionId === item.id}
             >
               <View style={styles.sessionItemContent}>
                 <Text style={[styles.sessionItemTitle, { color: theme.text }]} numberOfLines={1}>
@@ -171,32 +195,37 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
                   {item.messages.length} messages
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={async () => {
-                  Alert.alert(
-                    'Delete Session',
-                    'Are you sure you want to delete this session?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        onPress: async () => {
-                          try {
-                            const client = getOpencodeClient();
-                            await client.session.delete({ path: { id: item.id } });
-                            await useAppStore.getState().syncSessionsFromSDK();
-                          } catch (error) {
-                            Alert.alert('Error', 'Failed to delete session');
-                          }
+              
+              {loadingSessionId === item.id ? (
+                <ActivityIndicator size="small" color={theme.accent1} />
+              ) : (
+                <TouchableOpacity
+                  onPress={async () => {
+                    Alert.alert(
+                      'Delete Session',
+                      'Are you sure you want to delete this session?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          onPress: async () => {
+                            try {
+                              const client = getOpencodeClient();
+                              await client.session.delete({ path: { id: item.id } });
+                              await useAppStore.getState().syncSessionsFromSDK();
+                            } catch (error) {
+                              Alert.alert('Error', 'Failed to delete session');
+                            }
+                          },
+                          style: 'destructive',
                         },
-                        style: 'destructive',
-                      },
-                    ]
-                  );
-                }}
-              >
-                <MaterialIcons name="close" size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
+                      ]
+                    );
+                  }}
+                >
+                  <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           )}
         />

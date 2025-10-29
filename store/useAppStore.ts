@@ -13,6 +13,7 @@ export interface Session {
   title: string;
   messages: ChatMessage[];
   createdAt: number;
+  messagesFetched?: boolean; // Track if messages loaded from server
 }
 
 interface AppStore {
@@ -22,8 +23,10 @@ interface AppStore {
   
   sessions: Session[];
   currentSessionId: string | null;
+  isLoadingMessages: boolean;
   setCurrentSessionId: (id: string) => void;
   syncSessionsFromSDK: () => Promise<void>;
+  fetchSessionMessages: (sessionId: string) => Promise<void>;
   createSession: (title: string) => string;
   deleteSession: (id: string) => void;
   
@@ -50,6 +53,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   sessions: [],
   currentSessionId: null,
+  isLoadingMessages: false,
   setCurrentSessionId: (id: string) => set({ currentSessionId: id }),
   
   syncSessionsFromSDK: async () => {
@@ -62,6 +66,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         title: s.title || 'Untitled',
         messages: [],
         createdAt: new Date(s.createdAt).getTime(),
+        messagesFetched: false,
       })) || [];
       
       set({ sessions });
@@ -72,6 +77,63 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     } catch (error) {
       console.error('Failed to sync sessions:', error);
+      throw error;
+    }
+  },
+
+  fetchSessionMessages: async (sessionId: string) => {
+    const session = get().sessions.find(s => s.id === sessionId);
+    
+    // Skip if already fetched (caching)
+    if (session?.messagesFetched) {
+      return;
+    }
+
+    set({ isLoadingMessages: true });
+
+    try {
+      const client = getOpencodeClient();
+      const result = await client.session.messages({ path: { id: sessionId } });
+
+      if (result.data) {
+        const messages: ChatMessage[] = result.data.map((msg: any) => {
+          const { info, parts } = msg;
+          
+          // Extract text content
+          const textParts = parts.filter((p: any) => p.type === 'text');
+          
+          if (textParts.length > 0) {
+            return {
+              id: info.id,
+              role: info.role as 'user' | 'assistant',
+              content: textParts.map((p: any) => p.text).join('\n'),
+              timestamp: new Date(info.createdAt).getTime(),
+            };
+          }
+          
+          // Fallback for non-text parts
+          const partTypes = parts.map((p: any) => p.type).join(', ');
+          return {
+            id: info.id,
+            role: info.role as 'user' | 'assistant',
+            content: `[Unsupported message type: ${partTypes}. Implementation needed.]`,
+            timestamp: new Date(info.createdAt).getTime(),
+          };
+        });
+
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
+            s.id === sessionId
+              ? { ...s, messages, messagesFetched: true }
+              : s
+          ),
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+      throw error;
+    } finally {
+      set({ isLoadingMessages: false });
     }
   },
   
@@ -82,6 +144,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       title,
       messages: [],
       createdAt: Date.now(),
+      messagesFetched: true, // New sessions have no messages
     };
     set((state) => ({
       sessions: [newSession, ...state.sessions],
