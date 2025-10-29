@@ -16,6 +16,7 @@ import { useAppStore, ChatMessage as ChatMessageType } from '@/store/useAppStore
 import { ChatMessage } from '@/components/ChatMessage';
 import { MessageInput } from '@/components/MessageInput';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getOpencodeClient } from '@/services';
 
 type DrawerNavigation = DrawerNavigationProp<any>;
 
@@ -30,12 +31,12 @@ export default function ChatScreen() {
 
   const currentSession = getCurrentSession();
 
-  // Auto-create first session if none exist
+  // Load sessions from SDK when baseURL is set
   useEffect(() => {
-    if (sessions.length === 0) {
-      createSession('Initial Chat');
+    if (baseURL && sessions.length === 0) {
+      useAppStore.getState().syncSessionsFromSDK();
     }
-  }, [sessions.length, createSession]);
+  }, [baseURL]);
 
   // Set up header with hamburger menu
   useEffect(() => {
@@ -82,36 +83,36 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     try {
-      // TODO: Replace with actual API call to baseURL
-      // This is a placeholder - implement according to your server API
-      const response = await fetch(`${baseURL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const client = getOpencodeClient();
+      
+      const result = await client.session.prompt({
+        path: { id: currentSession.id },
+        body: {
+          model: { 
+            providerID: "anthropic", 
+            modelID: "claude-3-5-sonnet-20241022" 
+          },
+          parts: [{ type: "text", text: messageText }],
         },
-        body: JSON.stringify({
-          message: messageText,
-          sessionId: currentSession.id,
-        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
+      if (result.data) {
+        const assistantMessage: ChatMessageType = {
+          id: result.data.info.id,
+          role: 'assistant',
+          content: result.data.parts
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join('\n') || 'No response received',
+          timestamp: Date.now(),
+        };
+
+        addMessage(currentSession.id, assistantMessage);
+
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
       }
-
-      const data = await response.json();
-      const assistantMessage: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response || 'No response received',
-        timestamp: Date.now(),
-      };
-
-      addMessage(currentSession.id, assistantMessage);
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
     } catch (error) {
       Alert.alert('Error', `Failed to send message: ${error}`);
 

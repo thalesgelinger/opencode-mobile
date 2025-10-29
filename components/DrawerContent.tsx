@@ -12,6 +12,7 @@ import {
 import { colors } from '@/constants/colors';
 import { useAppStore } from '@/store/useAppStore';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getOpencodeClient } from '@/services';
 
 interface DrawerContentProps {
   navigation: any;
@@ -20,13 +21,14 @@ interface DrawerContentProps {
 export function DrawerContent({ navigation }: DrawerContentProps) {
   const colorScheme = useColorScheme() || 'light';
   const theme = colors[colorScheme];
-  const { baseURL, setBaseURL, isBaseURLValid, sessions, setCurrentSessionId, createSession, deleteSession } =
+  const { baseURL, setBaseURL, isBaseURLValid, sessions, setCurrentSessionId, deleteSession } =
     useAppStore();
 
   const [isEditingURL, setIsEditingURL] = useState(!baseURL);
   const [urlInput, setUrlInput] = useState(baseURL);
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  const handleSaveURL = () => {
+  const handleSaveURL = async () => {
     if (!urlInput.trim()) {
       Alert.alert('Error', 'Please enter a valid URL');
       return;
@@ -37,14 +39,40 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
       return;
     }
 
-    setBaseURL(urlInput);
-    setIsEditingURL(false);
+    setIsConnecting(true);
+    try {
+      await setBaseURL(urlInput);
+      setIsEditingURL(false);
+      Alert.alert('Success', 'Connected and sessions loaded');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to connect to server');
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
-  const handleNewSession = () => {
-    const sessionId = createSession(`Chat ${new Date().toLocaleTimeString()}`);
-    setCurrentSessionId(sessionId);
-    navigation.closeDrawer();
+  const handleNewSession = async () => {
+    if (!baseURL) {
+      Alert.alert('Error', 'Please configure base URL first');
+      return;
+    }
+    
+    try {
+      const client = getOpencodeClient();
+      
+      const result = await client.session.create({
+        body: { title: `Chat ${new Date().toLocaleTimeString()}` }
+      });
+      
+      if (result.data) {
+        // Refresh sessions from SDK
+        await useAppStore.getState().syncSessionsFromSDK();
+        setCurrentSessionId(result.data.id);
+        navigation.closeDrawer();
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create session');
+    }
   };
 
   return (
@@ -78,10 +106,13 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
             />
             <View style={styles.urlButtonGroup}>
               <TouchableOpacity
-                style={[styles.urlButton, { backgroundColor: theme.accent1 }]}
+                style={[styles.urlButton, { backgroundColor: theme.accent1, opacity: isConnecting ? 0.5 : 1 }]}
                 onPress={handleSaveURL}
+                disabled={isConnecting}
               >
-                <Text style={[styles.urlButtonText, { color: theme.bg }]}>Save</Text>
+                <Text style={[styles.urlButtonText, { color: theme.bg }]}>
+                  {isConnecting ? 'Connecting...' : 'Save'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.urlButton, { backgroundColor: theme.accent2 }]}
@@ -89,6 +120,7 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
                   setIsEditingURL(false);
                   setUrlInput(baseURL);
                 }}
+                disabled={isConnecting}
               >
                 <Text style={[styles.urlButtonText, { color: theme.bg }]}>Cancel</Text>
               </TouchableOpacity>
@@ -140,7 +172,7 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => {
+                onPress={async () => {
                   Alert.alert(
                     'Delete Session',
                     'Are you sure you want to delete this session?',
@@ -148,7 +180,15 @@ export function DrawerContent({ navigation }: DrawerContentProps) {
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Delete',
-                        onPress: () => deleteSession(item.id),
+                        onPress: async () => {
+                          try {
+                            const client = getOpencodeClient();
+                            await client.session.delete({ path: { id: item.id } });
+                            await useAppStore.getState().syncSessionsFromSDK();
+                          } catch (error) {
+                            Alert.alert('Error', 'Failed to delete session');
+                          }
+                        },
                         style: 'destructive',
                       },
                     ]

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getOpencodeClient, setBaseUrl } from '@/services';
 
 export interface ChatMessage {
   id: string;
@@ -16,12 +17,13 @@ export interface Session {
 
 interface AppStore {
   baseURL: string;
-  setBaseURL: (url: string) => void;
+  setBaseURL: (url: string) => Promise<void>;
   isBaseURLValid: (url: string) => boolean;
   
   sessions: Session[];
   currentSessionId: string | null;
   setCurrentSessionId: (id: string) => void;
+  syncSessionsFromSDK: () => Promise<void>;
   createSession: (title: string) => string;
   deleteSession: (id: string) => void;
   
@@ -32,7 +34,11 @@ interface AppStore {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   baseURL: '',
-  setBaseURL: (url: string) => set({ baseURL: url }),
+  setBaseURL: async (url: string) => {
+    set({ baseURL: url });
+    setBaseUrl(url);
+    await get().syncSessionsFromSDK();
+  },
   isBaseURLValid: (url: string) => {
     try {
       new URL(url);
@@ -45,6 +51,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sessions: [],
   currentSessionId: null,
   setCurrentSessionId: (id: string) => set({ currentSessionId: id }),
+  
+  syncSessionsFromSDK: async () => {
+    try {
+      const client = getOpencodeClient();
+      const sdkSessions = await client.session.list();
+      
+      const sessions: Session[] = sdkSessions.data?.map((s: any) => ({
+        id: s.id,
+        title: s.title || 'Untitled',
+        messages: [],
+        createdAt: new Date(s.createdAt).getTime(),
+      })) || [];
+      
+      set({ sessions });
+      
+      // Set first session as current if none selected
+      if (!get().currentSessionId && sessions.length > 0) {
+        set({ currentSessionId: sessions[0].id });
+      }
+    } catch (error) {
+      console.error('Failed to sync sessions:', error);
+    }
+  },
   
   createSession: (title: string) => {
     const id = Date.now().toString();
