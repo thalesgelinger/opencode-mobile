@@ -101,56 +101,40 @@ export function ChatMessage({ message }: ChatMessageProps) {
   return (
     <View
       style={[
-        styles.container,
-        isUser ? styles.userContainer : styles.assistantContainer,
+        styles.messageBubble,
+        {
+          backgroundColor: isUser ? theme.accent1 : theme.bgSecondary,
+          borderColor: theme.border,
+        },
       ]}
     >
-      <View
-        style={[
-          styles.messageBubble,
-          {
-            backgroundColor: isUser ? theme.accent1 : theme.bgSecondary,
-            borderColor: theme.border,
-          },
-        ]}
-      >
-        {isUser ? (
-          <Text
-            style={[
-              styles.messageText,
-              {
-                color: theme.bg,
-              },
-            ]}
-          >
-            {message.content}
-          </Text>
-        ) : (
-          <Markdown style={markdownStyles}>
-            {message.content}
-          </Markdown>
-        )}
-      </View>
+      {isUser ? (
+        <Text
+          style={[
+            styles.messageText,
+            {
+              color: theme.bg,
+            },
+          ]}
+        >
+          {message.content}
+        </Text>
+      ) : (
+        <Markdown style={markdownStyles}>
+          {message.content}
+        </Markdown>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginVertical: 6,
-    paddingHorizontal: 16,
-  },
-  userContainer: {
-    alignItems: 'flex-end',
-  },
-  assistantContainer: {
-    alignItems: 'flex-start',
-  },
   messageBubble: {
-    maxWidth: '85%',
+    width: '100%',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
+    marginVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
   },
   messageText: {
