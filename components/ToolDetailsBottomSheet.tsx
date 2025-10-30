@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { useTheme } from '@react-navigation/native';
 import { colors } from '../constants/colors';
@@ -24,17 +24,23 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
   error,
   onClose,
 }) => {
-  const snapPoints = [300, 500, 800];
+   const snapPoints = ['50%', '100%'];
   const modalRef = useRef<BottomSheetModal>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const { colors: themeColors } = useTheme();
 
-  useEffect(() => {
-    if (visible) {
-      modalRef.current?.present();
-    } else {
-      modalRef.current?.dismiss();
-    }
-  }, [visible]);
+   useEffect(() => {
+     if (visible) {
+       modalRef.current?.present();
+     } else {
+       modalRef.current?.dismiss();
+     }
+   }, [visible]);
+
+   useEffect(() => {
+     // Don't reset scroll on content updates - preserve user's scroll position
+     scrollRef.current?.scrollToEnd({ animated: false });
+   }, []);
 
   const getStatusColor = (s: string) => {
     const statusColors = {
@@ -56,23 +62,30 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
   const statusColor = getStatusColor(status);
 
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      onDismiss={onClose}
-    >
-      <BottomSheetView style={[styles.container, { backgroundColor: colors.light.bg }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{tool}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{status.toUpperCase()}</Text>
-          </View>
-        </View>
+      <BottomSheetModal
+        ref={modalRef}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        onDismiss={onClose}
+        animateOnMount
+        detached={false}
+      >
+       <BottomSheetView style={{ backgroundColor: colors.light.bg, flex: 1 }}>
+         {/* Header */}
+         <View style={styles.header}>
+           <Text style={styles.headerTitle}>{tool}</Text>
+           <View style={styles.headerRight}>
+             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+               <Text style={styles.statusText}>{status.toUpperCase()}</Text>
+             </View>
+             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+               <Text style={styles.closeButtonText}>✕</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
 
-        {/* Content: Input & Output */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Content: Input & Output */}
+          <ScrollView ref={scrollRef} style={styles.content} showsVerticalScrollIndicator contentContainerStyle={styles.contentContainer} scrollEventThrottle={16} scrollsToTop={false}>
           {error && status === 'error' && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Error</Text>
@@ -106,20 +119,17 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
             </View>
           )}
 
-          {!parsed.input && !parsed.output && !error && (
-            <Text style={styles.emptyText}>No content available</Text>
-          )}
-        </ScrollView>
+           {!parsed.input && !parsed.output && !error && (
+             <Text style={styles.emptyText}>No content available</Text>
+           )}
+         </ScrollView>
       </BottomSheetView>
     </BottomSheetModal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingBottom: 20,
-  },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -167,12 +177,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     lineHeight: 18,
   },
-  emptyText: {
-    fontSize: 14,
-    color: colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: 20,
-  },
+   emptyText: {
+     fontSize: 14,
+     color: colors.light.textSecondary,
+     textAlign: 'center',
+     marginTop: 20,
+   },
+   headerRight: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     gap: 12,
+   },
+   closeButton: {
+     padding: 8,
+     width: 32,
+     height: 32,
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+   closeButtonText: {
+     fontSize: 18,
+     fontWeight: '600',
+     color: colors.light.textSecondary,
+   },
+   contentContainer: {
+     paddingBottom: 20,
+   },
 });
 
 export default ToolDetailsBottomSheet;
