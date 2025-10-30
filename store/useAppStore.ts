@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getOpencodeClient, setBaseUrl } from '@/services';
+import { getOpencodeClient, setBaseUrl, getModelDetails } from '@/services';
 import type { Part, Agent } from '@opencode-ai/sdk';
 
 export interface ChatMessage {
@@ -25,6 +25,32 @@ export interface Model {
     name: string;
 }
 
+export interface ModelDetails {
+    cost?: {
+        input: number;
+        output: number;
+        cache_read?: number;
+        cache_write?: number;
+    };
+    limit?: {
+        context: number;
+        output: number;
+    };
+}
+
+export interface SessionTokens {
+    tokens: {
+        input: number;
+        output: number;
+        reasoning: number;
+        cache: {
+            read: number;
+            write: number;
+        };
+    };
+    cost: number;
+}
+
 export interface Provider {
     id: string;
     name: string;
@@ -45,10 +71,12 @@ interface AppStore {
 
     models: Model[];
     currentModel: string | null;
+    currentModelDetails: ModelDetails | null;
     recentModels: string[];
     fetchModels: () => Promise<void>;
     setCurrentModel: (modelId: string) => Promise<void>;
     getCurrentModel: () => string | null;
+    getCurrentModelDetails: () => ModelDetails | null;
 
     sessions: Session[];
     currentSessionId: string | null;
@@ -62,6 +90,10 @@ interface AppStore {
     addMessage: (sessionId: string, message: ChatMessage) => void;
     getCurrentSession: () => Session | null;
     clearCurrentSession: () => void;
+
+    sessionTokens: Record<string, SessionTokens>;
+    getSessionTokens: () => SessionTokens | null;
+    updateSessionTokens: (sessionId: string, tokens: SessionTokens) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -152,6 +184,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     models: [],
     currentModel: null,
+    currentModelDetails: null,
     recentModels: [],
     fetchModels: async () => {
         try {
@@ -179,6 +212,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 const savedModel = await AsyncStorage.getItem('currentModel');
                 if (savedModel && allModels.find(m => m.id === savedModel)) {
                     set({ currentModel: savedModel });
+                    const details = await getModelDetails(savedModel);
+                    set({ currentModelDetails: details });
                 } else {
                     // Try to get current model from SDK config
                     try {
@@ -187,6 +222,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                         if (sdkModel && allModels.find(m => m.id === sdkModel)) {
                             set({ currentModel: sdkModel });
                             await AsyncStorage.setItem('currentModel', sdkModel);
+                            const details = await getModelDetails(sdkModel);
+                            set({ currentModelDetails: details });
                         } else {
                             // Fallback to grok-code-fast
                             const fallback = 'opencode/grok-code-fast';
@@ -194,6 +231,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                             if (model) {
                                 set({ currentModel: model.id });
                                 await AsyncStorage.setItem('currentModel', model.id);
+                                const details = await getModelDetails(model.id);
+                                set({ currentModelDetails: details });
                             }
                         }
                     } catch (e) {
@@ -204,6 +243,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                         if (model) {
                             set({ currentModel: model.id });
                             await AsyncStorage.setItem('currentModel', model.id);
+                            const details = await getModelDetails(model.id);
+                            set({ currentModelDetails: details });
                         }
                     }
                 }
@@ -237,9 +278,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
         } catch (error) {
             console.error('Failed to save model:', error);
         }
+
+        // Fetch and cache model details
+        const details = await getModelDetails(modelId);
+        set({ currentModelDetails: details });
     },
     getCurrentModel: () => {
         return get().currentModel;
+    },
+    getCurrentModelDetails: () => {
+        return get().currentModelDetails;
     },
 
     sessions: [],
@@ -312,6 +360,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
                             : s
                     ),
                 }));
+
+                // Parse tokens from all assistant messages
+                let totalInput = 0;
+                let totalOutput = 0;
+                let totalReasoning = 0;
+                let totalCacheRead = 0;
+                let totalCacheWrite = 0;
+                let totalCost = 0;
+
+                messages.forEach((message) => {
+                    if (message.role === 'assistant' && message.parts) {
+                        const stepFinishParts = message.parts.filter((p: any) => p.type === 'step-finish');
+                        
+                        stepFinishParts.forEach((part: any) => {
+                            if (part.tokens) {
+                                totalInput += part.tokens.input || 0;
+                                totalOutput += part.tokens.output || 0;
+                                totalReasoning += part.tokens.reasoning || 0;
+                                totalCacheRead += part.tokens.cache?.read || 0;
+                                totalCacheWrite += part.tokens.cache?.write || 0;
+                            }
+                            if (part.cost) {
+                                totalCost += part.cost;
+                            }
+                        });
+                    }
+                });
+
+                // Update session tokens
+                if (totalInput > 0 || totalOutput > 0 || totalReasoning > 0) {
+                    const sessionTokens: SessionTokens = {
+                        tokens: {
+                            input: totalInput,
+                            output: totalOutput,
+                            reasoning: totalReasoning,
+                            cache: {
+                                read: totalCacheRead,
+                                write: totalCacheWrite,
+                            },
+                        },
+                        cost: totalCost,
+                    };
+                    get().updateSessionTokens(sessionId, sessionTokens);
+                }
             }
         } catch (error) {
             console.error('Failed to fetch messages:', error);
@@ -353,6 +445,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
                     : session
             ),
         }));
+
+        // Parse step-finish parts for token tracking (only for assistant messages)
+        if (message.role === 'assistant' && message.parts) {
+            const stepFinishParts = message.parts.filter((p: any) => p.type === 'step-finish');
+            
+            if (stepFinishParts.length > 0) {
+                let totalInput = 0;
+                let totalOutput = 0;
+                let totalReasoning = 0;
+                let totalCacheRead = 0;
+                let totalCacheWrite = 0;
+                let totalCost = 0;
+
+                stepFinishParts.forEach((part: any) => {
+                    if (part.tokens) {
+                        totalInput += part.tokens.input || 0;
+                        totalOutput += part.tokens.output || 0;
+                        totalReasoning += part.tokens.reasoning || 0;
+                        totalCacheRead += part.tokens.cache?.read || 0;
+                        totalCacheWrite += part.tokens.cache?.write || 0;
+                    }
+                    if (part.cost) {
+                        totalCost += part.cost;
+                    }
+                });
+
+                // Get existing session tokens
+                const existing = get().sessionTokens[sessionId];
+                const updated: SessionTokens = {
+                    tokens: {
+                        input: (existing?.tokens.input || 0) + totalInput,
+                        output: (existing?.tokens.output || 0) + totalOutput,
+                        reasoning: (existing?.tokens.reasoning || 0) + totalReasoning,
+                        cache: {
+                            read: (existing?.tokens.cache.read || 0) + totalCacheRead,
+                            write: (existing?.tokens.cache.write || 0) + totalCacheWrite,
+                        },
+                    },
+                    cost: (existing?.cost || 0) + totalCost,
+                };
+
+                get().updateSessionTokens(sessionId, updated);
+            }
+        }
     },
 
     getCurrentSession: () => {
@@ -368,6 +504,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
                     ? { ...session, messages: [] }
                     : session
             ),
+        }));
+    },
+
+    sessionTokens: {},
+    getSessionTokens: () => {
+        const sessionId = get().currentSessionId;
+        if (!sessionId) return null;
+        return get().sessionTokens[sessionId] || null;
+    },
+    updateSessionTokens: (sessionId: string, tokens: SessionTokens) => {
+        set((state) => ({
+            sessionTokens: {
+                ...state.sessionTokens,
+                [sessionId]: tokens,
+            },
         }));
     },
 }));

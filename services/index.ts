@@ -34,3 +34,28 @@ export const readFileFromURL = async (url: string): Promise<string> => {
         throw error
     }
 }
+
+// Helper: Get model cost/limit details from provider data
+export const getModelDetails = async (modelId: string) => {
+    try {
+        const client = getOpencodeClient()
+        const result = await client.config.providers()
+        
+        if (!result.data) return null
+        
+        const [providerId, modelKey] = modelId.split('/')
+        const provider = result.data.providers.find((p: any) => p.id === providerId)
+        
+        if (!provider?.models?.[modelKey]) return null
+        
+        const modelData = provider.models[modelKey]
+        
+        return {
+            cost: modelData.cost || undefined,
+            limit: modelData.limit || undefined,
+        }
+    } catch (error) {
+        console.error('getModelDetails error:', error)
+        return null
+    }
+}

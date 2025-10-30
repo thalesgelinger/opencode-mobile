@@ -17,6 +17,7 @@ import { colors } from '@/constants/colors';
 import { useAppStore, ChatMessage as ChatMessageType } from '@/store/useAppStore';
 import { ChatMessage } from '@/components/ChatMessage';
 import { MessageInput } from '@/components/MessageInput';
+import { TokenUsage } from '@/components/TokenUsage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getOpencodeClient } from '@/services';
 
@@ -31,6 +32,7 @@ export default function ChatScreen() {
   const agents = useAppStore(s => s.agents);
   const currentAgentIndex = useAppStore(s => s.currentAgentIndex);
   const currentModel = useAppStore(s => s.currentModel);
+  const sessionTokens = useAppStore(s => s.getSessionTokens());
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -51,7 +53,7 @@ export default function ChatScreen() {
     }
   }, [currentSessionId, fetchSessionMessages]);
 
-    // Set up header with hamburger menu
+    // Set up header with hamburger menu and token usage
     useEffect(() => {
         navigation.setOptions({
             headerLeft: () => (
@@ -64,8 +66,9 @@ export default function ChatScreen() {
                     <MaterialIcons name="menu" size={28} color={theme.text} />
                 </TouchableOpacity>
             ),
+            headerRight: () => <TokenUsage />,
         });
-    }, [navigation, theme.text]);
+    }, [navigation, theme.text, sessionTokens]);
 
     const handleSendMessage = async (messageText: string) => {
         if (!currentSession) {
