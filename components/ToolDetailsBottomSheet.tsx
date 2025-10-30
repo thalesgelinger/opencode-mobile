@@ -1,14 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
+import { useTheme } from '@react-navigation/native';
 import { colors } from '../constants/colors';
+import { SyntaxHighlighter } from './tool-renderers/SyntaxHighlighter';
+import { DiffViewer } from './tool-renderers/DiffViewer';
+import { parseToolContent, ParsedToolContent } from './tool-renderers/utils/parseToolContent';
 
 interface ToolDetailsBottomSheetProps {
   visible: boolean;
   tool: string;
   status: 'pending' | 'running' | 'completed' | 'error';
-  input?: any;
-  output?: string;
+  toolJson?: any;
   error?: string;
   onClose: () => void;
 }
@@ -17,14 +20,13 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
   visible,
   tool,
   status,
-  input,
-  output,
+  toolJson,
   error,
   onClose,
 }) => {
   const snapPoints = [300, 500, 800];
-  const [activeTab, setActiveTab] = useState<'input' | 'output' | 'error'>('output');
   const modalRef = useRef<BottomSheetModal>(null);
+  const { colors: themeColors } = useTheme();
 
   useEffect(() => {
     if (visible) {
@@ -44,27 +46,14 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
     return statusColors[s as keyof typeof statusColors] || colors.light.textSecondary;
   };
 
-  const shouldShowTab = (tab: 'input' | 'output' | 'error') => {
-    if (tab === 'input') return input !== undefined;
-    if (tab === 'output') return output !== undefined && status === 'completed';
-    if (tab === 'error') return error !== undefined && status === 'error';
-    return false;
-  };
+  const parsed: ParsedToolContent = useMemo(() => {
+    if (!toolJson || status !== 'completed') {
+      return { type: 'unknown' };
+    }
+    return parseToolContent(toolJson);
+  }, [toolJson, status]);
 
-  const getTabContent = () => {
-    if (activeTab === 'input' && input !== undefined) {
-      return typeof input === 'string' ? input : JSON.stringify(input, null, 2);
-    }
-    if (activeTab === 'output' && output !== undefined) {
-      return output;
-    }
-    if (activeTab === 'error' && error !== undefined) {
-      return error;
-    }
-    return '';
-  };
-
-  const tabColor = getStatusColor(status);
+  const statusColor = getStatusColor(status);
 
   return (
     <BottomSheetModal
@@ -77,57 +66,49 @@ const ToolDetailsBottomSheet: React.FC<ToolDetailsBottomSheetProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{tool}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: tabColor }]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
             <Text style={styles.statusText}>{status.toUpperCase()}</Text>
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          {shouldShowTab('input') && (
-            <TouchableOpacity
-              style={[
-                styles.tab,
-                activeTab === 'input' && [styles.activeTab, { borderBottomColor: tabColor }],
-              ]}
-              onPress={() => setActiveTab('input')}
-            >
-              <Text style={[styles.tabText, activeTab === 'input' && { color: tabColor, fontWeight: '600' }]}>
-                Input
-              </Text>
-            </TouchableOpacity>
+        {/* Content: Input & Output */}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {error && status === 'error' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Error</Text>
+              <View style={[styles.errorBox, { backgroundColor: themeColors.notification }]}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            </View>
           )}
-          {shouldShowTab('output') && (
-            <TouchableOpacity
-              style={[
-                styles.tab,
-                activeTab === 'output' && [styles.activeTab, { borderBottomColor: tabColor }],
-              ]}
-              onPress={() => setActiveTab('output')}
-            >
-              <Text style={[styles.tabText, activeTab === 'output' && { color: tabColor, fontWeight: '600' }]}>
-                Output
-              </Text>
-            </TouchableOpacity>
-          )}
-          {shouldShowTab('error') && (
-            <TouchableOpacity
-              style={[
-                styles.tab,
-                activeTab === 'error' && [styles.activeTab, { borderBottomColor: tabColor }],
-              ]}
-              onPress={() => setActiveTab('error')}
-            >
-              <Text style={[styles.tabText, activeTab === 'error' && { color: '#ef4444', fontWeight: '600' }]}>
-                Error
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        {/* Content */}
-        <ScrollView style={styles.content}>
-          <Text style={styles.code}>{getTabContent()}</Text>
+          {parsed.input && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>{parsed.input.label}</Text>
+              <SyntaxHighlighter
+                code={parsed.input.content}
+                language={parsed.input.language || 'text'}
+              />
+            </View>
+          )}
+
+          {parsed.output && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>{parsed.output.label}</Text>
+              {parsed.output.language === 'diff' ? (
+                <DiffViewer diff={parsed.output.content} />
+              ) : (
+                <SyntaxHighlighter
+                  code={parsed.output.content}
+                  language={parsed.output.language || 'text'}
+                />
+              )}
+            </View>
+          )}
+
+          {!parsed.input && !parsed.output && !error && (
+            <Text style={styles.emptyText}>No content available</Text>
+          )}
         </ScrollView>
       </BottomSheetView>
     </BottomSheetModal>
@@ -163,39 +144,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 11,
   },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light.bgSecondary,
-    paddingHorizontal: 16,
-  },
-  tab: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginRight: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-  },
-  tabText: {
-    fontSize: 14,
-    color: colors.light.textSecondary,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  code: {
-    fontFamily: 'monospace',
-    fontSize: 12,
+  section: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.light.text,
-    backgroundColor: colors.light.bgSecondary,
+    marginBottom: 8,
+  },
+  errorBox: {
     padding: 12,
-    borderRadius: 4,
+    borderRadius: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#fff',
     lineHeight: 18,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.light.textSecondary,
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 

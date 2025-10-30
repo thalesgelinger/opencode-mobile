@@ -106,11 +106,17 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
             }
         }
 
+        // Build toolJson from state
+        const toolJson = {
+            type: part.tool.toLowerCase(),
+            ...(state as any).input,
+            ...(state.status === 'completed' && { output: completedState.output }),
+        };
+
         return {
             tool: part.tool,
             status: state.status as 'pending' | 'running' | 'completed' | 'error',
-            input: (state as any).input,
-            output: completedState.output,
+            toolJson,
             error: errorMsg,
         };
     };
