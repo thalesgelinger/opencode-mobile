@@ -5,6 +5,7 @@ import { ContentPreview } from '../ContentPreview';
 import { TextBottomSheet } from '../TextBottomSheet';
 import { FileBottomSheet } from '../FileBottomSheet';
 import TodoPartRenderer from './TodoPartRenderer';
+import { colors } from '../../constants/colors';
 
 interface ToolPartRendererProps {
   part: ToolPart;
@@ -17,19 +18,24 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
   const [bottomSheetTitle, setBottomSheetTitle] = useState('');
   const [bottomSheetType, setBottomSheetType] = useState<'text' | 'file'>('text');
 
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return styles.pending;
-      case 'running':
-        return styles.running;
-      case 'completed':
-        return styles.completed;
-      case 'error':
-        return styles.error;
-      default:
-        return styles.default;
-    }
+  
+
+  const getToolColor = (tool: string) => {
+    const toolColors = {
+      'bash': '#4ade80',      // Green for bash
+      'edit': '#3b82f6',       // Blue for edit
+      'read': '#f59e0b',       // Orange for read
+      'search': '#8b5cf6',     // Blue for search
+      'webfetch': '#06b6d4',   // Cyan for webfetch
+      'figma': '#a855f7',       // Purple for figma
+      'maestro': '#ef4444',     // Red for maestro
+      'wezterm': '#6b7280',    // Gray for wezterm
+      'linear': '#10b981',      // Green for linear
+      'shortcut': '#f59e0b',     // Orange for shortcut
+      'leaf': '#22c55e',        // Red for leaf
+      'playwright': '#8b5cf6',    // Blue for playwright
+    };
+    return toolColors[tool as keyof typeof toolColors] || colors.light.textSecondary;
   };
 
   const handleExpand = (content: string, title: string, type: 'text' | 'file' = 'text') => {
@@ -51,23 +57,27 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
     return content.split('\n').length > 7;
   };
 
-  const renderContent = () => {
+  const isCollapsed = (content: string) => {
+    return content.split('\n').length <= 3;
+  };
+
+const renderContent = () => {
     switch (state.status) {
       case 'pending':
-        return <Text>Pending...</Text>;
+        return <Text style={styles.statusText}>Pending...</Text>;
       case 'running':
         const runningState = state as ToolStateRunning;
         return <Text style={styles.code}>{JSON.stringify(runningState.input, null, 2)}</Text>;
       case 'completed':
         const completedState = state as ToolStateCompleted;
         const output = completedState.output || '';
-        const input = JSON.stringify(completedState.input, null, 2);
+        const input = JSON.stringify(completedState.input ? completedState.input : {}, null, 2);
         
         // Handle todo tools specially
         if (isTodoTool(part.tool)) {
           try {
-            const parsedInput = completedState.input as any;
-            const todos = parsedInput?.todos || [];
+            const parsedInput = completedState.input || {};
+            const todos = Array.isArray(parsedInput?.todos) ? parsedInput.todos : [];
             
             if (todos.length > 0) {
               return <TodoPartRenderer todos={todos} />;
@@ -77,9 +87,30 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
           }
         }
         
+        if (isCollapsed(output)) {
+          // Collapsed view - show simple status lines
+          const lines = output.split('\n').slice(0, 3);
+          const totalLines = output.split('\n').length;
+          return (
+            <>
+              <Text style={styles.title}>Input</Text>
+              <Text style={styles.code}>{input}</Text>
+              <Text style={styles.title}>Output</Text>
+              {lines.map((line, index) => (
+                <Text key={index} style={styles.code}>{line}</Text>
+              ))}
+              {totalLines > 3 && (
+                <Text style={styles.collapsedIndicator}>... ({totalLines - 3} more lines)</Text>
+              )}
+            </>
+          );
+        }
+        
         if (shouldShowPreview(output)) {
           const filename = isFileReadTool(part.tool) 
-            ? (completedState.input as any)?.filePath?.split('/').pop() || 'Output'
+            ? (completedState.input?.filePath && typeof completedState.input.filePath === 'string' 
+              ? completedState.input.filePath.split('/').pop() || 'Output'
+              : 'Output')
             : `${part.tool} Output`;
           
           return (
@@ -89,12 +120,12 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
               <Text style={styles.title}>Output</Text>
               <ContentPreview
                 content={output}
-                filename={filename}
-                onExpand={() => handleExpand(
-                  output, 
-                  filename,
-                  isFileReadTool(part.tool) ? 'file' : 'text'
-                )}
+                  filename={filename}
+                  onExpand={() => handleExpand(
+                    output, 
+                    filename,
+                    isFileReadTool(part.tool) ? 'file' : 'text'
+                  )}
               />
             </>
           );
@@ -126,7 +157,7 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
   return (
     <>
       <View style={styles.container}>
-        <View style={[styles.statusContainer, getStatusStyle(state.status)]}>
+        <View style={[styles.statusContainer, { backgroundColor: getToolColor(part.tool) }]}>
           <Text style={styles.statusText}>{part.tool} - {state.status.toUpperCase()}</Text>
         </View>
         <View style={styles.contentContainer}>{renderContent()}</View>
@@ -154,7 +185,7 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.light.bg,
     borderRadius: 8,
     marginVertical: 8,
     padding: 12,
@@ -167,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statusText: {
-    color: '#fff',
+    color: colors.light.text,
     fontWeight: 'bold',
     fontSize: 12,
   },
@@ -181,27 +212,33 @@ const styles = StyleSheet.create({
   },
   code: {
     fontFamily: 'monospace',
-    backgroundColor: '#e0e0e0',
+    backgroundColor: colors.light.bgSecondary,
     padding: 8,
     borderRadius: 4,
   },
   errorText: {
-    color: 'red',
+    color: colors.light.error,
   },
   pending: {
-    backgroundColor: 'gray',
+    backgroundColor: colors.light.textSecondary,
   },
   running: {
-    backgroundColor: 'blue',
+    backgroundColor: colors.light.accent1,
   },
   completed: {
-    backgroundColor: 'green',
+    backgroundColor: colors.light.success,
   },
   error: {
-    backgroundColor: 'red',
+    backgroundColor: colors.light.error,
   },
   default: {
-    backgroundColor: 'black',
+    backgroundColor: colors.light.text,
+  },
+  collapsedIndicator: {
+    color: colors.light.textSecondary,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });
 

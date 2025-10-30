@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { colors } from '../constants/colors';
 
 interface ContentPreviewProps {
   content: string;
@@ -62,7 +63,7 @@ export const ContentPreview: React.FC<ContentPreviewProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.light.bg,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -72,19 +73,20 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#e8e8e8',
+    backgroundColor: colors.light.bgSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#d0d0d0',
+    borderBottomColor: colors.light.border,
   },
   filename: {
     fontSize: 13,
     fontWeight: '600',
     fontFamily: 'monospace',
     flex: 1,
+    color: colors.light.text,
   },
   lineCount: {
     fontSize: 11,
-    color: '#666',
+    color: colors.light.textSecondary,
     fontFamily: 'monospace',
   },
   codeContainer: {
@@ -94,6 +96,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 12,
     lineHeight: 18,
+    color: colors.light.text,
   },
   expandButton: {
     flexDirection: 'row',
@@ -102,11 +105,11 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#d0d0d0',
-    backgroundColor: '#f0f0f0',
+    borderTopColor: colors.light.border,
+    backgroundColor: colors.light.bgSecondary,
   },
   expandText: {
-    color: '#007AFF',
+    color: colors.light.accent1,
     fontSize: 13,
     fontWeight: '600',
   },
