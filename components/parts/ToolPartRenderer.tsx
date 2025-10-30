@@ -95,6 +95,8 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
     const getBottomSheetProps = () => {
         const completedState = state as ToolStateCompleted;
         const errorState = state as ToolStateError;
+        const toolType = part.tool.toLowerCase();
+        const input = (state as any).input || {};
 
         let errorMsg = '';
         if (state.status === 'error' && errorState.error) {
@@ -106,12 +108,48 @@ const ToolPartRenderer: React.FC<ToolPartRendererProps> = ({ part }) => {
             }
         }
 
-        // Build toolJson from state
-        const toolJson = {
-            type: part.tool.toLowerCase(),
-            ...(state as any).input,
-            ...(state.status === 'completed' && { output: completedState.output }),
+        // Build toolJson from state - map output to correct field per tool type
+        let toolJson: any = {
+            type: toolType,
+            ...input,
         };
+
+        if (state.status === 'completed') {
+            const output = completedState.output;
+            
+            // Map output to the correct field based on tool type
+            switch (toolType) {
+                case 'bash':
+                    toolJson.stdout = output;
+                    break;
+                case 'read':
+                    // read tool output IS the file content
+                    toolJson.content = output;
+                    break;
+                case 'write':
+                    // write tool output is confirmation - keep as is
+                    toolJson.output = output;
+                    break;
+                case 'edit':
+                    // For edit, we'll use oldString/newString from input
+                    // Don't add output field
+                    break;
+                case 'grep':
+                    // grep output needs to be parsed
+                    toolJson.matches = output;
+                    break;
+                case 'glob':
+                    // glob output needs to be parsed
+                    toolJson.files = output;
+                    break;
+                case 'webfetch':
+                    // webfetch output is content
+                    toolJson.content = output;
+                    break;
+                default:
+                    toolJson.output = output;
+            }
+        }
 
         return {
             tool: part.tool,

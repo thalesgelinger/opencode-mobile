@@ -1,5 +1,4 @@
 import { detectLanguageFromPath, detectLanguageFromContent } from './detectLanguage';
-import { generateDiffFromOperations } from './generateDiff';
 
 export interface ParsedToolContent {
   type: 'bash' | 'read' | 'write' | 'edit' | 'grep' | 'glob' | 'webfetch' | 'patch' | 'unknown';
@@ -28,7 +27,7 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
 
   // Bash tool: command input, stdout/stderr output
   if (toolType === 'bash' || toolJson.command) {
-    const output = toolJson.stdout || toolJson.stderr || '';
+    const output = toolJson.stdout || toolJson.stderr || toolJson.output || '';
     return {
       type: 'bash',
       input: {
@@ -45,7 +44,7 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
   }
 
   // Read tool: file path input, content output (strip line numbers)
-  if (toolType === 'read' || toolJson.filePath) {
+  if (toolType === 'read' || (toolJson.filePath && toolJson.content)) {
     let content = toolJson.content || '';
 
     // Strip line numbers (format: spaces + 5-digit number + pipe + content)
@@ -85,16 +84,29 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
     };
   }
 
-  // Edit tool: show unified diff from operations
-  if (toolType === 'edit' || (toolJson.id && toolJson.updates)) {
-    const filePath = toolJson.filePath || `file_${toolJson.id}`;
-    const diff = generateDiffFromOperations(toolJson.updates || [], filePath);
+  // Edit tool: show unified diff from oldString/newString
+  if (toolType === 'edit' || (toolJson.filePath && (toolJson.oldString || toolJson.newString))) {
+    const filePath = toolJson.filePath || 'file';
+    const oldString = toolJson.oldString || '';
+    const newString = toolJson.newString || '';
+    
+    // Generate simple unified diff
+    const oldLines = oldString.split('\n');
+    const newLines = newString.split('\n');
+    
+    const diff = [
+      `--- a/${filePath}`,
+      `+++ b/${filePath}`,
+      `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+      ...oldLines.map((line: string) => `-${line}`),
+      ...newLines.map((line: string) => `+${line}`),
+    ].join('\n');
 
     return {
       type: 'edit',
       input: {
-        label: 'Work Item ID',
-        content: toolJson.id?.toString() || '',
+        label: 'File',
+        content: filePath,
         language: 'text',
       },
       output: {
@@ -103,18 +115,26 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
         language: 'diff',
       },
       metadata: {
-        id: toolJson.id,
-        updateCount: toolJson.updates?.length || 0,
+        filePath,
       },
     };
   }
 
   // Grep tool: pattern and results
-  if (toolType === 'grep' || (toolJson.pattern && toolJson.matches !== undefined)) {
-    const matches = toolJson.matches || [];
-    const resultsText = Array.isArray(matches)
-      ? matches.map((m: any) => `${m.file}:${m.line}`).join('\n')
-      : matches;
+  if (toolType === 'grep' || (toolJson.pattern && (toolJson.matches !== undefined || toolJson.output))) {
+    const matches = toolJson.matches || toolJson.output || [];
+    let resultsText = '';
+    
+    if (typeof matches === 'string') {
+      resultsText = matches;
+    } else if (Array.isArray(matches)) {
+      resultsText = matches
+        .map((m: any) => {
+          if (typeof m === 'string') return m;
+          return `${m.file}:${m.line}`;
+        })
+        .join('\n');
+    }
 
     return {
       type: 'grep',
@@ -135,9 +155,15 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
   }
 
   // Glob tool: pattern and results
-  if (toolType === 'glob' || (toolJson.pattern && toolJson.files !== undefined)) {
-    const files = toolJson.files || [];
-    const resultsText = Array.isArray(files) ? files.join('\n') : files;
+  if (toolType === 'glob' || (toolJson.pattern && (toolJson.files !== undefined || toolJson.output))) {
+    const files = toolJson.files || toolJson.output || [];
+    let resultsText = '';
+    
+    if (typeof files === 'string') {
+      resultsText = files;
+    } else if (Array.isArray(files)) {
+      resultsText = files.join('\n');
+    }
 
     return {
       type: 'glob',
@@ -160,6 +186,7 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
   // WebFetch tool: URL input, content output
   if (toolType === 'webfetch' || toolJson.url) {
     const format = toolJson.format || 'text';
+    const content = toolJson.content || toolJson.output || '';
     return {
       type: 'webfetch',
       input: {
@@ -169,7 +196,7 @@ export const parseToolContent = (toolJson: any): ParsedToolContent => {
       },
       output: {
         label: 'Content',
-        content: toolJson.content || '',
+        content,
         language: format === 'markdown' ? 'text' : format === 'html' ? 'text' : 'text',
       },
       metadata: {
