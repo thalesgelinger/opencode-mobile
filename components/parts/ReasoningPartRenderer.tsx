@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { ReasoningPart } from '@opencode-ai/sdk';
+import ToolActionLine from '../ToolActionLine';
 
 interface ReasoningPartRendererProps {
   part: ReasoningPart;
@@ -11,29 +12,36 @@ const ReasoningPartRenderer: React.FC<ReasoningPartRendererProps> = ({ part }) =
   const { text } = part;
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
-        <Text style={styles.title}>Reasoning {isExpanded ? '[-]' : '[+]'}</Text>
-      </TouchableOpacity>
-      {isExpanded && <Text style={styles.reasoning}>{text}</Text>}
+    <View>
+      <ToolActionLine
+        icon="💭"
+        label="Reasoning"
+        status="completed"
+        onPress={() => setIsExpanded(!isExpanded)}
+      />
+      
+      {isExpanded && (
+        <ScrollView style={styles.content}>
+          <Text style={styles.text}>{text}</Text>
+        </ScrollView>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    marginVertical: 8,
-    padding: 12,
-  },
-  title: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  reasoning: {
+  content: {
     marginTop: 8,
+    maxHeight: 300,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+  },
+  text: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#374151',
   },
 });
 
