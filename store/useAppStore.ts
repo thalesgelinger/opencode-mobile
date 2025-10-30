@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getOpencodeClient, setBaseUrl, getModelDetails } from '@/services';
+import { getOpencodeClient, setBaseUrl, getModelDetails, startEventListener, stopEventListener } from '@/services';
 import type { Part, Agent } from '@opencode-ai/sdk';
 
 export interface ChatMessage {
@@ -107,12 +107,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 await get().syncSessionsFromSDK();
                 await get().fetchAgents();
                 await get().fetchModels();
+                // Start event listener
+                startEventListener(savedURL);
             }
         } catch (error) {
             console.error('Failed to load baseURL:', error);
         }
     },
     setBaseURL: async (url: string) => {
+        // Stop old listener
+        stopEventListener();
+
         set({ baseURL: url });
         setBaseUrl(url);
 
@@ -126,6 +131,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         await get().syncSessionsFromSDK();
         await get().fetchAgents();
         await get().fetchModels();
+
+        // Start new listener
+        startEventListener(url);
     },
     isBaseURLValid: (url: string) => {
         try {
@@ -266,7 +274,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     },
     setCurrentModel: async (modelId: string) => {
         set({ currentModel: modelId });
-        
+
         // Update recent models (max 5, most recent first)
         const { recentModels } = get();
         const updated = [modelId, ...recentModels.filter(m => m !== modelId)].slice(0, 5);
@@ -372,7 +380,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 messages.forEach((message) => {
                     if (message.role === 'assistant' && message.parts) {
                         const stepFinishParts = message.parts.filter((p: any) => p.type === 'step-finish');
-                        
+
                         stepFinishParts.forEach((part: any) => {
                             if (part.tokens) {
                                 totalInput += part.tokens.input || 0;
@@ -449,7 +457,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         // Parse step-finish parts for token tracking (only for assistant messages)
         if (message.role === 'assistant' && message.parts) {
             const stepFinishParts = message.parts.filter((p: any) => p.type === 'step-finish');
-            
+
             if (stepFinishParts.length > 0) {
                 let totalInput = 0;
                 let totalOutput = 0;
