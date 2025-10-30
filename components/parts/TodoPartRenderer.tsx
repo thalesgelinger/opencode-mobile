@@ -6,7 +6,6 @@ interface Todo {
   id: string;
   content: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'high' | 'medium' | 'low';
 }
 
 interface TodoPartRendererProps {
@@ -24,19 +23,6 @@ const TodoPartRenderer: React.FC<TodoPartRendererProps> = ({ todos }) => {
         return <Ionicons name="close-circle" size={16} color="#F44336" />;
       default:
         return <Ionicons name="ellipse-outline" size={16} color="#9E9E9E" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return '#F44336';
-      case 'medium':
-        return '#FF9800';
-      case 'low':
-        return '#4CAF50';
-      default:
-        return '#9E9E9E';
     }
   };
 
@@ -61,9 +47,7 @@ const TodoPartRenderer: React.FC<TodoPartRendererProps> = ({ todos }) => {
               {todo.content}
             </Text>
           </View>
-          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(todo.priority) }]}>
-            <Text style={styles.priorityText}>{todo.priority[0].toUpperCase()}</Text>
-          </View>
+
         </View>
       ))}
     </View>
@@ -109,18 +93,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: '#999',
   },
-  priorityBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  priorityText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
+
 });
 
 export default TodoPartRenderer;
