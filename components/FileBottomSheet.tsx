@@ -89,8 +89,8 @@ export function FileBottomSheet({ visible, content, filename, onClose }: FileBot
             style={styles.content}
             contentContainerStyle={styles.contentContainer}
           >
-            <View style={[styles.fileContainer, { backgroundColor: theme.bgSecondary }]}>
-              <View style={styles.lineNumbersContainer}>
+             <View style={[styles.fileContainer, { backgroundColor: theme.bgSecondary }]}>
+               <View style={[styles.lineNumbersContainer, { borderRightColor: theme.border }]}>
                 {renderLineNumbers()}
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -163,12 +163,10 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: 'row',
   },
-  lineNumbersContainer: {
-    paddingRight: 12,
-    borderRightWidth: 1,
-    borderRightColor: '#d0d0d0',
-    marginRight: 12,
-  },
+   lineNumbersContainer: {
+     paddingRight: 12,
+     borderRightWidth: 1,
+   },
   lineNumber: {
     fontSize: 12,
     fontFamily: 'monospace',

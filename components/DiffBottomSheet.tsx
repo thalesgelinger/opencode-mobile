@@ -31,20 +31,20 @@ export function DiffBottomSheet({ visible, diff, filename, onClose }: DiffBottom
     Alert.alert('Copied', 'Diff copied to clipboard');
   };
 
-  const renderDiffLine = (line: string, index: number) => {
-    let lineStyle = styles.diffNormal;
-    let textColor = theme.text;
-    
-    if (line.startsWith('+')) {
-      lineStyle = styles.diffAdd;
-      textColor = '#22c55e';
-    } else if (line.startsWith('-')) {
-      lineStyle = styles.diffRemove;
-      textColor = '#ef4444';
-    } else if (line.startsWith('@@')) {
-      lineStyle = styles.diffHunk;
-      textColor = '#3b82f6';
-    }
+   const renderDiffLine = (line: string, index: number) => {
+     let lineStyle = styles.diffNormal;
+     let textColor = theme.text;
+     
+     if (line.startsWith('+')) {
+       lineStyle = styles.diffAdd;
+       textColor = theme.success;
+     } else if (line.startsWith('-')) {
+       lineStyle = styles.diffRemove;
+       textColor = theme.error;
+     } else if (line.startsWith('@@')) {
+       lineStyle = styles.diffHunk;
+       textColor = theme.accent1;
+     }
 
     return (
       <Text 
