@@ -19,6 +19,18 @@ export interface Session {
     messagesFetched?: boolean;
 }
 
+export interface Model {
+    id: string;
+    provider: string;
+    name: string;
+}
+
+export interface Provider {
+    id: string;
+    name: string;
+    models: Model[];
+}
+
 interface AppStore {
     baseURL: string;
     loadBaseURL: () => Promise<void>;
@@ -30,6 +42,13 @@ interface AppStore {
     fetchAgents: () => Promise<void>;
     cycleAgent: () => void;
     getCurrentAgent: () => Agent | null;
+
+    models: Model[];
+    currentModel: string | null;
+    recentModels: string[];
+    fetchModels: () => Promise<void>;
+    setCurrentModel: (modelId: string) => Promise<void>;
+    getCurrentModel: () => string | null;
 
     sessions: Session[];
     currentSessionId: string | null;
@@ -55,6 +74,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 setBaseUrl(savedURL);
                 await get().syncSessionsFromSDK();
                 await get().fetchAgents();
+                await get().fetchModels();
             }
         } catch (error) {
             console.error('Failed to load baseURL:', error);
@@ -73,6 +93,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
         await get().syncSessionsFromSDK();
         await get().fetchAgents();
+        await get().fetchModels();
     },
     isBaseURLValid: (url: string) => {
         try {
@@ -97,7 +118,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
                 // Clear old index and start fresh
                 await AsyncStorage.removeItem('currentAgentIndex');
-                
+
                 const validIndex = filtered.length > 0 ? 0 : 0;
 
                 set({ agents: filtered, currentAgentIndex: validIndex });
@@ -127,6 +148,98 @@ export const useAppStore = create<AppStore>((set, get) => ({
     getCurrentAgent: () => {
         const { agents, currentAgentIndex } = get();
         return agents[currentAgentIndex] || null;
+    },
+
+    models: [],
+    currentModel: null,
+    recentModels: [],
+    fetchModels: async () => {
+        try {
+            const client = getOpencodeClient();
+            const result = await client.config.providers();
+
+            if (result.data) {
+                const allModels: Model[] = [];
+                result.data.providers.forEach((provider: any) => {
+                    if (provider.models && typeof provider.models === 'object') {
+                        // models is an object with model IDs as keys
+                        Object.entries(provider.models).forEach(([modelId, modelData]: [string, any]) => {
+                            allModels.push({
+                                id: `${provider.id}/${modelId}`,
+                                provider: provider.id,
+                                name: modelData.name || modelId,
+                            });
+                        });
+                    }
+                });
+
+                set({ models: allModels });
+
+                // Priority: 1. saved model, 2. SDK config model, 3. grok-code-fast fallback
+                const savedModel = await AsyncStorage.getItem('currentModel');
+                if (savedModel && allModels.find(m => m.id === savedModel)) {
+                    set({ currentModel: savedModel });
+                } else {
+                    // Try to get current model from SDK config
+                    try {
+                        const configResult = await client.config.get();
+                        const sdkModel = configResult.data?.model;
+                        if (sdkModel && allModels.find(m => m.id === sdkModel)) {
+                            set({ currentModel: sdkModel });
+                            await AsyncStorage.setItem('currentModel', sdkModel);
+                        } else {
+                            // Fallback to grok-code-fast
+                            const fallback = 'opencode/grok-code-fast';
+                            const model = allModels.find(m => m.id === fallback) || allModels[0];
+                            if (model) {
+                                set({ currentModel: model.id });
+                                await AsyncStorage.setItem('currentModel', model.id);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to get SDK config model:', e);
+                        // Fallback to grok-code-fast
+                        const fallback = 'opencode/grok-code-fast';
+                        const model = allModels.find(m => m.id === fallback) || allModels[0];
+                        if (model) {
+                            set({ currentModel: model.id });
+                            await AsyncStorage.setItem('currentModel', model.id);
+                        }
+                    }
+                }
+
+                // Load recent models
+                const savedRecents = await AsyncStorage.getItem('recentModels');
+                if (savedRecents) {
+                    try {
+                        const recents = JSON.parse(savedRecents);
+                        set({ recentModels: recents });
+                    } catch (e) {
+                        console.error('Failed to parse recent models:', e);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch models:', error);
+        }
+    },
+    setCurrentModel: async (modelId: string) => {
+        set({ currentModel: modelId });
+        
+        // Update recent models (max 5, most recent first)
+        const { recentModels } = get();
+        const updated = [modelId, ...recentModels.filter(m => m !== modelId)].slice(0, 5);
+        set({ recentModels: updated });
+
+        try {
+            await AsyncStorage.setItem('currentModel', modelId);
+            await AsyncStorage.setItem('recentModels', JSON.stringify(updated));
+        } catch (error) {
+            console.error('Failed to save model:', error);
+        }
+    },
+    getCurrentModel: () => {
+        return get().currentModel;
     },
 
     sessions: [],

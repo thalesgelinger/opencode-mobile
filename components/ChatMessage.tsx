@@ -1,8 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { colors } from '@/constants/colors';
 import { ChatMessage as ChatMessageType } from '@/store/useAppStore';
+import { CodeBottomSheet } from './CodeBottomSheet';
+import ToolPartRenderer from './parts/ToolPartRenderer';
+import PatchPartRenderer from './parts/PatchPartRenderer';
+import ReasoningPartRenderer from './parts/ReasoningPartRenderer';
+import FilePartRenderer from './parts/FilePartRenderer';
+import AgentPartRenderer from './parts/AgentPartRenderer';
+import RetryPartRenderer from './parts/RetryPartRenderer';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -11,8 +18,21 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const colorScheme = useColorScheme() || 'light';
   const theme = colors[colorScheme];
+  const [codeModal, setCodeModal] = useState<{ visible: boolean; code: string; language: string }>({
+    visible: false,
+    code: '',
+    language: 'text',
+  });
 
   const isUser = message.role === 'user';
+
+  const handleCodePress = (code: string, language: string) => {
+    setCodeModal({ visible: true, code, language });
+  };
+
+  const handleCloseCodeModal = () => {
+    setCodeModal({ visible: false, code: '', language: 'text' });
+  };
 
   const markdownStyles = {
     body: {
@@ -98,33 +118,100 @@ export function ChatMessage({ message }: ChatMessageProps) {
     },
   };
 
+  const renderParts = () => {
+    if (!message.parts || message.parts.length === 0) {
+      return null;
+    }
+
+    return message.parts.map((part, index) => {
+      const key = `${message.id}-${part.type}-${index}`;
+      
+      switch (part.type) {
+        case 'text':
+          // Already rendered in content
+          return null;
+        
+        case 'tool':
+          return <ToolPartRenderer key={key} part={part} />;
+        
+        case 'patch':
+          return <PatchPartRenderer key={key} part={part} />;
+        
+        case 'reasoning':
+          return <ReasoningPartRenderer key={key} part={part} />;
+        
+        case 'file':
+          return <FilePartRenderer key={key} part={part} />;
+        
+        case 'agent':
+          return <AgentPartRenderer key={key} part={part} />;
+        
+        case 'retry':
+          return <RetryPartRenderer key={key} part={part} />;
+        
+        case 'step-start':
+        case 'step-finish':
+        case 'snapshot':
+          // Ignore these parts
+          return null;
+        
+        default:
+          // Fallback for unknown types
+          return (
+            <View
+              key={key}
+              style={[styles.unknownPart, { backgroundColor: theme.bg, borderColor: theme.border }]}
+            >
+              <Text style={[styles.unknownPartText, { color: theme.textSecondary }]}>
+                Unknown part type: {(part as any).type}
+              </Text>
+            </View>
+          );
+      }
+    });
+  };
+
   return (
-    <View
-      style={[
-        styles.messageBubble,
-        {
-          backgroundColor: isUser ? theme.accent1 : theme.bgSecondary,
-          borderColor: theme.border,
-        },
-      ]}
-    >
-      {isUser ? (
-        <Text
-          style={[
-            styles.messageText,
-            {
-              color: theme.bg,
-            },
-          ]}
-        >
-          {message.content}
-        </Text>
-      ) : (
-        <Markdown style={markdownStyles}>
-          {message.content}
-        </Markdown>
-      )}
-    </View>
+    <>
+      <View
+        style={[
+          styles.messageBubble,
+          {
+            backgroundColor: isUser ? theme.accent1 : theme.bgSecondary,
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        {isUser ? (
+          <Text
+            style={[
+              styles.messageText,
+              {
+                color: theme.bg,
+              },
+            ]}
+          >
+            {message.content}
+          </Text>
+        ) : (
+          <>
+            {message.content && (
+              <Markdown style={markdownStyles}>
+                {message.content}
+              </Markdown>
+            )}
+            {renderParts()}
+          </>
+        )}
+      </View>
+      
+      <CodeBottomSheet
+        visible={codeModal.visible}
+        code={codeModal.code}
+        language={codeModal.language}
+        onClose={handleCloseCodeModal}
+      />
+    </>
   );
 }
 
@@ -140,5 +227,15 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  unknownPart: {
+    padding: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  unknownPartText: {
+    fontSize: 12,
+    fontFamily: 'monospace',
   },
 });

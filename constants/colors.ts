@@ -10,6 +10,8 @@ export const colors = {
     accent1: '#8E8B8B',
     accent2: '#BCBBBB',
     accent3: '#DAD9D9',
+    error: '#FF3B30',
+    success: '#34C759',
   },
   dark: {
     bg: '#211E1E',
@@ -21,6 +23,8 @@ export const colors = {
     accent1: '#8E8B8B',
     accent2: '#BCBBBB',
     accent3: '#DAD9D9',
+    error: '#FF453A',
+    success: '#32D74B',
   },
 };
 

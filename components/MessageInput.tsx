@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useAppStore } from '@/store/useAppStore';
+import { ModelBottomSheet } from './ModelBottomSheet';
 
 interface MessageInputProps {
   onSendMessage?: (message: string) => Promise<void>;
@@ -28,8 +29,10 @@ export function MessageInput({ onSendMessage, isLoading = false }: MessageInputP
   const cycleAgent = useAppStore(s => s.cycleAgent);
   const currentAgentIndex = useAppStore(s => s.currentAgentIndex);
   const agents = useAppStore(s => s.agents);
+  const currentModel = useAppStore(s => s.currentModel);
   
   const [message, setMessage] = useState('');
+  const [isModelSheetVisible, setIsModelSheetVisible] = useState(false);
   const currentAgent = agents[currentAgentIndex] || null;
   
   console.log('MessageInput render:', { agentsCount: agents.length, currentAgentIndex, currentAgent: currentAgent?.name });
@@ -97,6 +100,15 @@ export function MessageInput({ onSendMessage, isLoading = false }: MessageInputP
       </View>
 
       <View style={styles.bottomRow}>
+        <TouchableOpacity
+          style={[styles.modelButton, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
+          onPress={() => setIsModelSheetVisible(true)}
+          disabled={isLoading}
+        >
+          <Text style={[styles.modelButtonText, { color: theme.textSecondary }]} numberOfLines={1}>
+            {currentModel || 'Select Model'}
+          </Text>
+        </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           style={[styles.agentPill, { backgroundColor: getAgentColor() }]}
@@ -108,6 +120,11 @@ export function MessageInput({ onSendMessage, isLoading = false }: MessageInputP
           </Text>
         </TouchableOpacity>
       </View>
+
+      <ModelBottomSheet
+        isVisible={isModelSheetVisible}
+        onClose={() => setIsModelSheetVisible(false)}
+      />
     </View>
   );
 }
@@ -136,6 +153,18 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  modelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: 200,
+  },
+  modelButtonText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   agentPill: {
     paddingHorizontal: 16,

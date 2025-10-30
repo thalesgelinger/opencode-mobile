@@ -30,6 +30,7 @@ export default function ChatScreen() {
   const { getCurrentSession, addMessage, baseURL, createSession, sessions, isLoadingMessages, currentSessionId, fetchSessionMessages } = useAppStore();
   const agents = useAppStore(s => s.agents);
   const currentAgentIndex = useAppStore(s => s.currentAgentIndex);
+  const currentModel = useAppStore(s => s.currentModel);
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -96,11 +97,20 @@ export default function ChatScreen() {
 
         try {
             const client = getOpencodeClient();
+            
+            // Parse model string "provider/model" into object
+            let modelObj;
+            if (currentModel) {
+                const [providerID, modelID] = currentModel.split('/');
+                modelObj = { providerID, modelID };
+            }
+
             const result = await client.session.prompt({
                 path: { id: currentSession.id },
                 body: {
                     parts: [{ type: "text", text: messageText }],
                     ...(currentAgent && { agent: currentAgent.name }),
+                    ...(modelObj && { model: modelObj }),
                 },
             });
 
