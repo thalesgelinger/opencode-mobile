@@ -124,8 +124,51 @@ function createSSEStream(baseURL: string): { stream: AsyncGenerator<Event> } {
     return { stream, close };
 }
 
-export const startEventListener = async (baseURL: string) => {
+const handleSSEEvent = (event: Event) => {
+    switch (event.type) {
+        case "installation.updated":
+            break
+        case "lsp.client.diagnostics":
+            break
+        case "message.updated":
+            break
+        case "message.removed":
+            break
+        case "message.part.updated":
+            break
+        case "message.part.removed":
+            break
+        case "session.compacted":
+            break
+        case "permission.updated":
+            break
+        case "permission.replied":
+            break
+        case "file.edited":
+            break
+        case "file.watcher.updated":
+            break
+        case "todo.updated":
+            break
+        case "session.idle":
+            break
+        case "session.created":
+            break
+        case "session.updated":
+            break
+        case "session.deleted":
+            break
+        case "session.error":
+            break
+        case "server.connected":
+            break
+        case "ide.installed":
+            break
+    }
+}
 
+
+export const startEventListener = async (baseURL: string) => {
 
     if (isEventListenerRunning) {
         console.log('🔌 Event listener already running')
@@ -145,9 +188,7 @@ export const startEventListener = async (baseURL: string) => {
             // Consume event stream
             for await (const event of result.stream) {
                 if (!isEventListenerRunning) break
-
-                console.log('📡 Event:', event.type)
-                console.log(JSON.stringify(event, null, 2))
+                handleSSEEvent(event)
             }
 
             // Stream ended normally
