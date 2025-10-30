@@ -28,10 +28,13 @@ export default function ChatScreen() {
     const navigation = useNavigation<DrawerNavigation>();
 
   const { getCurrentSession, addMessage, baseURL, createSession, sessions, isLoadingMessages, currentSessionId, fetchSessionMessages } = useAppStore();
+  const agents = useAppStore(s => s.agents);
+  const currentAgentIndex = useAppStore(s => s.currentAgentIndex);
   const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const currentSession = getCurrentSession();
+  const currentAgent = agents[currentAgentIndex] || null;
 
   // Load sessions from SDK when baseURL is set
   useEffect(() => {
@@ -93,22 +96,22 @@ export default function ChatScreen() {
 
         try {
             const client = getOpencodeClient();
-
             const result = await client.session.prompt({
                 path: { id: currentSession.id },
                 body: {
                     parts: [{ type: "text", text: messageText }],
+                    ...(currentAgent && { agent: currentAgent.name }),
                 },
             });
 
             if (result.data) {
+                const textParts = result.data.parts.filter((p: any) => p.type === 'text');
+                
                 const assistantMessage: ChatMessageType = {
                     id: result.data.info.id,
                     role: 'assistant',
-                    content: result.data.parts
-                        .filter((p: any) => p.type === 'text')
-                        .map((p: any) => p.text)
-                        .join('\n') || 'No response received',
+                    content: textParts.map((p: any) => p.text).join('\n') || '',
+                    parts: result.data.parts,
                     timestamp: Date.now(),
                 };
 
@@ -118,10 +121,9 @@ export default function ChatScreen() {
                     flatListRef.current?.scrollToEnd({ animated: true });
                 }, 100);
             }
-        } catch (error) {
-            Alert.alert('Error', `Failed to send message: ${error}`);
+        } catch (error: any) {
+            Alert.alert('Error', `Failed to send message: ${error.message || error}`);
 
-            // Add error message to chat
             const errorMessage: ChatMessageType = {
                 id: (Date.now() + 2).toString(),
                 role: 'assistant',

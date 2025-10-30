@@ -4,13 +4,14 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
+  Text,
   useColorScheme,
+  NativeSyntheticEvent,
+  TextInputKeyPressEventData,
+  Alert,
 } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useAppStore } from '@/store/useAppStore';
-import { MaterialIcons } from '@expo/vector-icons';
 
 interface MessageInputProps {
   onSendMessage?: (message: string) => Promise<void>;
@@ -20,12 +21,32 @@ interface MessageInputProps {
 export function MessageInput({ onSendMessage, isLoading = false }: MessageInputProps) {
   const colorScheme = useColorScheme() || 'light';
   const theme = colors[colorScheme];
-  const { baseURL, getCurrentSession } = useAppStore();
+  
+  // Use direct selectors to ensure re-render on state changes
+  const baseURL = useAppStore(s => s.baseURL);
+  const getCurrentSession = useAppStore(s => s.getCurrentSession);
+  const cycleAgent = useAppStore(s => s.cycleAgent);
+  const currentAgentIndex = useAppStore(s => s.currentAgentIndex);
+  const agents = useAppStore(s => s.agents);
+  
   const [message, setMessage] = useState('');
+  const currentAgent = agents[currentAgentIndex] || null;
+  
+  console.log('MessageInput render:', { agentsCount: agents.length, currentAgentIndex, currentAgent: currentAgent?.name });
+
+  const agentColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+  const getAgentColor = () => {
+    if (!currentAgent) return theme.accent1;
+    return agentColors[currentAgentIndex % agentColors.length];
+  };
+
+  const handleCycleAgent = () => {
+    cycleAgent();
+  };
 
   const handleSend = async () => {
     if (!message.trim()) {
-      Alert.alert('Error', 'Please enter a message');
       return;
     }
 
@@ -50,40 +71,41 @@ export function MessageInput({ onSendMessage, isLoading = false }: MessageInputP
     }
   };
 
+  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    if (e.nativeEvent.key === 'Enter' && !isLoading) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.bg, borderTopColor: theme.border }]}>
       <View style={[styles.inputContainer, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
         <TextInput
-          style={[
-            styles.input,
-            {
-              color: theme.text,
-            },
-          ]}
+          style={[styles.input, { color: theme.text }]}
           placeholder="Type your message..."
           placeholderTextColor={theme.textTertiary}
           value={message}
           onChangeText={setMessage}
+          onKeyPress={handleKeyPress}
+          returnKeyType="send"
           multiline
           maxLength={1000}
           editable={!isLoading}
+          blurOnSubmit={false}
         />
+      </View>
+
+      <View style={styles.bottomRow}>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity
-          style={[
-            styles.sendButton,
-            {
-              backgroundColor: theme.accent1,
-              opacity: isLoading || !message.trim() ? 0.5 : 1,
-            },
-          ]}
-          onPress={handleSend}
-          disabled={isLoading || !message.trim()}
+          style={[styles.agentPill, { backgroundColor: getAgentColor() }]}
+          onPress={handleCycleAgent}
+          disabled={isLoading}
         >
-          {isLoading ? (
-            <ActivityIndicator size="small" color={theme.bg} />
-          ) : (
-            <MaterialIcons name="send" size={20} color={theme.bg} />
-          )}
+          <Text style={[styles.agentText, { color: '#ffffff' }]} numberOfLines={1}>
+            {currentAgent?.name || 'No Agent'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -95,6 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderTopWidth: 1,
+    gap: 8,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -102,7 +125,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 12,
-    gap: 8,
   },
   input: {
     flex: 1,
@@ -111,11 +133,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     maxHeight: 100,
   },
-  sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  agentPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  agentText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
